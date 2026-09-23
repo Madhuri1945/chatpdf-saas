@@ -1,6 +1,6 @@
 package com.example.chatpdf.chat;
 
-import com.example.chatpdf.document.Document;
+import com.example.chatpdf.document.entities.Document;
 import jakarta.persistence.*;
 
 @Entity
