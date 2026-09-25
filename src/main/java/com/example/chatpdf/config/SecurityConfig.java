@@ -1,6 +1,8 @@
 package com.example.chatpdf.config;
 
 import com.example.chatpdf.auth.JwtAuthenticationFilter;
+import com.example.chatpdf.auth.OAuth2FailureHandler;
+import com.example.chatpdf.auth.OAuth2SuccessHandler;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -16,8 +18,12 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtFilter;
-    public SecurityConfig(JwtAuthenticationFilter jwtFilter){
+    private final OAuth2SuccessHandler successHandler;
+    private final OAuth2FailureHandler failureHandler;
+    public SecurityConfig(JwtAuthenticationFilter jwtFilter,OAuth2SuccessHandler successHandler,OAuth2FailureHandler failureHandler){
         this.jwtFilter=jwtFilter;
+        this.failureHandler=failureHandler;
+        this.successHandler=successHandler;
     }
     @Bean
     public PasswordEncoder passwordEncoder(){
@@ -36,10 +42,20 @@ public class SecurityConfig {
                 .sessionManagement(session->
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth->auth
-                        .requestMatchers("/api/auth/register","/api/auth/login"
-                        ,"/api/oauth2/**").permitAll()
+                        .requestMatchers(
+                                        "/api/auth/**",
+                                        "/oauth2/**",
+                                        "/login/**"
+                                ).permitAll()
                         .anyRequest().authenticated()
-                ).addFilterBefore(
+                ).
+                oauth2Login(oauth->oauth
+                        .successHandler(successHandler)
+                        .failureHandler(failureHandler)
+
+                ).
+
+                addFilterBefore(
                         jwtFilter,
                         UsernamePasswordAuthenticationFilter.class
                 );

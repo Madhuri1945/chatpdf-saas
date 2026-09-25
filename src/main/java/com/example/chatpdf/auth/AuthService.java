@@ -1,10 +1,12 @@
 package com.example.chatpdf.auth;
 
+
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class AuthService {
@@ -50,5 +52,21 @@ public class AuthService {
         RefreshToken refreshToken=refreshTokenService.createRefreshToken(user);
         return new AuthResponse(token,refreshToken.getToken(),refreshToken.getFamilyId());
 
+    }
+
+    @Transactional
+    public AuthResponse refresh(RefreshRequest request){
+        RefreshToken oldToken=refreshTokenService.findByToken(request.refreshToken());
+        refreshTokenService.validateRefreshToken(oldToken);
+        String accessToken= jwtService.generateAccessToken(oldToken.getUser());
+        RefreshToken newToken=refreshTokenService.rotateToken(oldToken);
+        refreshTokenService.revokeToken(oldToken);
+        return new AuthResponse(
+                accessToken, newToken.getToken(), newToken.getFamilyId()
+        );
+    }
+
+    public void logout(RefreshRequest request){
+        refreshTokenService.logout(request.refreshToken());
     }
 }
