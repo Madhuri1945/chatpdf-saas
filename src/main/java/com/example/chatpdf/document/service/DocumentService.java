@@ -5,12 +5,14 @@ import com.example.chatpdf.document.dto.DocumentListResponse;
 import com.example.chatpdf.document.dto.DocumentResponse;
 import com.example.chatpdf.document.dto.UploadDocumentResponse;
 import com.example.chatpdf.document.entities.Document;
+import com.example.chatpdf.document.entities.DocumentChunk;
 import com.example.chatpdf.document.entities.DocumentContent;
 import com.example.chatpdf.document.entities.Status;
 import com.example.chatpdf.document.exception.DocumentNotFoundException;
 import com.example.chatpdf.document.exception.EmptyPdfException;
 import com.example.chatpdf.document.exception.FileTooLargeException;
 import com.example.chatpdf.document.exception.InvalidFileException;
+import com.example.chatpdf.document.repository.DocumentChunkRepository;
 import com.example.chatpdf.document.repository.DocumentContentRepository;
 import com.example.chatpdf.document.repository.DocumentRepository;
 import com.example.chatpdf.document.storage.StorageService;
@@ -25,63 +27,80 @@ public class DocumentService {
 
     private final DocumentRepository repo;
     private final StorageService storageService;
-    private static final long MAX_FILE_SIZE = 20 * 1024 * 1024;
     private final PdfProcessingService pdfProcessingService;
     private final DocumentContentRepository contentRepository;
+    private final TextChunkingService chunkingService;
+    private final DocumentChunkRepository chunkRepository;
 
-    public DocumentService(DocumentRepository repo, StorageService storageService, PdfProcessingService pdfProcessingService, DocumentContentRepository contentRepository) {
+    private static final long MAX_FILE_SIZE = 20 * 1024 * 1024;
+
+    public DocumentService(
+            DocumentRepository repo,
+            StorageService storageService,
+            PdfProcessingService pdfProcessingService,
+            DocumentContentRepository contentRepository, TextChunkingService chunkingService, DocumentChunkRepository chunkRepository
+    ) {
         this.repo = repo;
         this.storageService = storageService;
         this.pdfProcessingService = pdfProcessingService;
         this.contentRepository = contentRepository;
+        this.chunkingService = chunkingService;
+        this.chunkRepository = chunkRepository;
     }
+
     public UploadDocumentResponse upload(
             MultipartFile file,
             String title,
             User owner
-    ){
+    ) {
+
         validateFile(file);
-        String storagePath= storageService.store(file);
-        Document document=new Document();
+
+        String storagePath = storageService.store(file);
+
+        Document document = new Document();
         document.setTitle(title);
         document.setFilename(file.getOriginalFilename());
         document.setStoragePath(storagePath);
+        document.setMimeType(file.getContentType());
         document.setSize(file.getSize());
         document.setStatus(Status.UPLOADING);
         document.setUploadedAt(LocalDateTime.now());
         document.setOwner(owner);
-        Document saved=repo.save(document);
-        saved.setStatus(Status.PROCESSING);
-        repo.save(saved);
-        try{
-            String text= pdfProcessingService.extractText(saved.getStoragePath());
-            if(text.isBlank()) throw new EmptyPdfException();
-            DocumentContent content=new DocumentContent();
-            content.setDocument(saved);
-            content.setExtractedText(text);
-            contentRepository.save(content);
-            saved.setStatus(Status.READY);
-        }catch(Exception e){
-                saved.setStatus(Status.FAILED);
-        }
-        repo.save(saved);
+
+        Document saved = repo.save(document);
+
+        // Only one line
+        processDocument(saved);
+
         return new UploadDocumentResponse(
                 saved.getId(),
                 saved.getTitle(),
                 saved.getStatus()
         );
     }
-    public List<DocumentListResponse> getMyDocuments(User owner){
-        return repo.findByOwner(owner).stream()
-                .map(doc->new DocumentListResponse(
-                        doc.getId(),doc.getTitle(),doc.getStatus(),doc.getUploadedAt()
-                )).toList();
+
+    public List<DocumentListResponse> getMyDocuments(User owner) {
+        return repo.findByOwner(owner)
+                .stream()
+                .map(doc -> new DocumentListResponse(
+                        doc.getId(),
+                        doc.getTitle(),
+                        doc.getStatus(),
+                        doc.getUploadedAt()
+                ))
+                .toList();
     }
-    public DocumentResponse getDocument(Long id, User owner){
-        Document document=repo.findById(id).orElseThrow(DocumentNotFoundException::new);
-        if(!document.getOwner().getId().equals(owner.getId())){
+
+    public DocumentResponse getDocument(Long id, User owner) {
+
+        Document document = repo.findById(id)
+                .orElseThrow(DocumentNotFoundException::new);
+
+        if (!document.getOwner().getId().equals(owner.getId())) {
             throw new DocumentNotFoundException();
         }
+
         return new DocumentResponse(
                 document.getId(),
                 document.getTitle(),
@@ -92,6 +111,52 @@ public class DocumentService {
                 document.getUploadedAt()
         );
     }
+
+    // -----------------------------
+    // Processing Pipeline
+    // -----------------------------
+    private void processDocument(Document document) {
+
+        document.setStatus(Status.PROCESSING);
+        repo.save(document);
+
+        try {
+
+            String text = pdfProcessingService.extractText(
+                    document.getStoragePath()
+            );
+
+            if (text.isBlank()) {
+                throw new EmptyPdfException();
+            }
+
+            DocumentContent content = new DocumentContent();
+            content.setDocument(document);
+            content.setExtractedText(text);
+
+            contentRepository.save(content);
+            List<String> chunks=chunkingService.chunk(text);
+            int index=0;
+            int start=0;
+            for(String chunk:chunks){
+                DocumentChunk entity=new DocumentChunk();
+                entity.setDocument(document);
+                entity.setChunkIndex(index++);
+                entity.setStartOffset(start);
+                entity.setEndOffset(start+chunk.length());
+
+            }
+            document.setStatus(Status.READY);
+
+        } catch (Exception e) {
+
+            document.setStatus(Status.FAILED);
+        }
+
+        repo.save(document);
+
+    }
+
     private void validateFile(MultipartFile file) {
 
         if (file.isEmpty()) {
@@ -106,5 +171,4 @@ public class DocumentService {
             throw new FileTooLargeException();
         }
     }
-
 }
