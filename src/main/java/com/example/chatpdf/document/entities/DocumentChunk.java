@@ -1,30 +1,36 @@
 package com.example.chatpdf.document.entities;
 
-import com.pgvector.PGvector;
+import com.example.chatpdf.document.entities.Document;
 import jakarta.persistence.*;
 import lombok.Data;
+import org.hibernate.annotations.Array;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 @Entity
-@Table(name="document_chunk")
+@Table(name = "document_chunk")
 @Data
 public class DocumentChunk {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long Id;
+    private Long id;
+
     @ManyToOne
-    @JoinColumn(name="document_id",nullable = false)
+    @JoinColumn(name = "document_id", nullable = false)
     private Document document;
 
-    @Column(nullable = false)
+    @Column(name = "chunk_index", nullable = false)
     private Integer chunkIndex;
 
-    @Lob
-    @Column(columnDefinition = "TEXT",nullable=false)
+    @Column(columnDefinition = "TEXT", nullable = false)
     private String content;
 
-    @Column(columnDefinition = "vector(1536)")
-    private PGvector embedding;
+    @JdbcTypeCode(SqlTypes.VECTOR)
+    @Array(length = 1536)
+    @Column(columnDefinition = "vector(1536)", nullable = false)
+    private float[] embedding;
+
     private Integer startOffset;
     private Integer endOffset;
 }

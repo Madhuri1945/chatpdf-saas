@@ -7,5 +7,5 @@ import java.util.List;
 
 @Service
 public interface EmbeddingService {
-    List<PGvector> generateEmbeddings(List<String> texts);
+    List<float[]> generateEmbeddings(List<String> texts);
 }

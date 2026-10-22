@@ -16,6 +16,7 @@ import com.example.chatpdf.document.repository.DocumentChunkRepository;
 import com.example.chatpdf.document.repository.DocumentContentRepository;
 import com.example.chatpdf.document.repository.DocumentRepository;
 import com.example.chatpdf.document.storage.StorageService;
+import com.pgvector.PGvector;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -31,6 +32,7 @@ public class DocumentService {
     private final DocumentContentRepository contentRepository;
     private final TextChunkingService chunkingService;
     private final DocumentChunkRepository chunkRepository;
+    private final EmbeddingService embeddingService;
 
     private static final long MAX_FILE_SIZE = 20 * 1024 * 1024;
 
@@ -38,7 +40,7 @@ public class DocumentService {
             DocumentRepository repo,
             StorageService storageService,
             PdfProcessingService pdfProcessingService,
-            DocumentContentRepository contentRepository, TextChunkingService chunkingService, DocumentChunkRepository chunkRepository
+            DocumentContentRepository contentRepository, TextChunkingService chunkingService, DocumentChunkRepository chunkRepository, EmbeddingService embeddingService
     ) {
         this.repo = repo;
         this.storageService = storageService;
@@ -46,6 +48,7 @@ public class DocumentService {
         this.contentRepository = contentRepository;
         this.chunkingService = chunkingService;
         this.chunkRepository = chunkRepository;
+        this.embeddingService = embeddingService;
     }
 
     public UploadDocumentResponse upload(
@@ -112,6 +115,7 @@ public class DocumentService {
         );
     }
 
+
     // -----------------------------
     // Processing Pipeline
     // -----------------------------
@@ -136,16 +140,23 @@ public class DocumentService {
 
             contentRepository.save(content);
             List<String> chunks=chunkingService.chunk(text);
-            int index=0;
+            List<float[]> embeddings=embeddingService.generateEmbeddings(chunks);
+
             int start=0;
-            for(String chunk:chunks){
+            for(int index=0;index<chunks.size();index++){
+                String chunk=chunks.get(index);
+                float[] embedding=embeddings.get(index);
                 DocumentChunk entity=new DocumentChunk();
                 entity.setDocument(document);
-                entity.setChunkIndex(index++);
+                entity.setContent(chunk);
+                entity.setEmbedding(embedding);
+                entity.setChunkIndex(index);
                 entity.setStartOffset(start);
                 entity.setEndOffset(start+chunk.length());
+                chunkRepository.save(entity);
 
             }
+
             document.setStatus(Status.READY);
 
         } catch (Exception e) {

@@ -23,6 +23,7 @@ public class RefreshTokenService {
         refreshToken.setFamilyId(UUID.randomUUID());
         refreshToken.setExpiry(LocalDateTime.now().plusDays(30));
         refreshToken.setRevoked(false);
+        refreshToken.setCreatedAt(LocalDateTime.now());
         return repo.save(refreshToken);
     }
 
