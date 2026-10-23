@@ -14,6 +14,7 @@ import com.example.chatpdf.document.exception.EmptyPdfException;
 import com.example.chatpdf.document.exception.FileTooLargeException;
 import com.example.chatpdf.document.exception.InvalidFileException;
 
+import com.example.chatpdf.exceptions.llm.LLMGatewayException;
 import jakarta.validation.ConstraintViolationException;
 
 import org.slf4j.Logger;
@@ -162,6 +163,26 @@ public class GlobalExceptionHandler {
                 HttpStatus.BAD_GATEWAY,
                 "An external service failed to process the request"
         );
+    }
+
+    @ExceptionHandler(LLMGatewayException.class)
+    public ResponseEntity<ApiResponse<Void>> handleLLMGatewayException(
+            LLMGatewayException ex) {
+
+        return ResponseEntity
+                .status(HttpStatus.BAD_GATEWAY)
+                .body(ApiResponse.error(
+                        "The AI service is temporarily unavailable. Please try again."
+                ));
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ApiResponse<Void>> handleIllegalArgumentException(
+            IllegalArgumentException ex) {
+
+        return ResponseEntity
+                .badRequest()
+                .body(ApiResponse.error(ex.getMessage()));
     }
 
     // Unexpected errors

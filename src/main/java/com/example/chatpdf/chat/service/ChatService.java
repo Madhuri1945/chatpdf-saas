@@ -46,7 +46,7 @@ public class ChatService {
             throw new DocumentNotFoundException();
         }
         if (doc.getStatus() != Status.READY) {
-            throw new DocumentNotReadyException();
+            throw new DocumentNotReadyException("document not found");
         }
         Chat chat=new Chat();
         chat.setDocument(doc);

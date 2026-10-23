@@ -1,6 +1,8 @@
 package com.example.chatpdf.chat.service;
 
 import com.example.chatpdf.chat.dto.LLMMessage;
+import com.example.chatpdf.chat.dto.LLMRequest;
+import com.example.chatpdf.chat.dto.LLMResponse;
 import com.example.chatpdf.message.Message;
 import org.springframework.stereotype.Service;
 
@@ -13,4 +15,5 @@ public interface LLMService {
             String context,
             List<LLMMessage> history
     );
+    LLMResponse generateResponse(LLMRequest request);
 }

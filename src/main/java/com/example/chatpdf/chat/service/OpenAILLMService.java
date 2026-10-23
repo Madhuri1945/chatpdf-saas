@@ -3,9 +3,11 @@ package com.example.chatpdf.chat.service;
 import com.example.chatpdf.chat.dto.LLMMessage;
 import com.example.chatpdf.chat.dto.LLMRequest;
 import com.example.chatpdf.chat.dto.LLMResponse;
+import com.example.chatpdf.exceptions.llm.LLMGatewayException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientResponseException;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -68,5 +70,60 @@ public class OpenAILLMService implements LLMService{
             throw new RuntimeException("Failed to generate LLM response");
         }
         return response.choices().get(0).message().content();
+    }
+
+    @Override
+    public LLMResponse generateResponse(LLMRequest request){
+        if (request == null
+                || request.model() == null
+                || request.model().isBlank()
+                || request.messages() == null
+                || request.messages().isEmpty()) {
+            throw new IllegalArgumentException("Invalid LLM request");
+        }
+         LLMResponse response;
+        try{
+            response=restClient.post().uri("/chat/completions")
+                    .header("Authorization","Bearer "+apiKey)
+                    .body(request)
+                    .retrieve()
+                    .body(LLMResponse.class);
+        }catch(RestClientResponseException ex){
+            throw new LLMGatewayException(
+                    "The AI service returned an HTTP error: "
+                            + ex.getStatusCode().value(),
+                    ex
+            );
+        }catch(LLMGatewayException ex){
+            throw ex;
+        }catch(RuntimeException ex){
+            throw new LLMGatewayException(
+                    "Failed to communicate with the AI service",
+                    ex
+            );
+        }
+         if(response==null || response.choices()==null || response.choices().isEmpty() || response.choices().get(0).message()==null){
+             throw new LLMGatewayException("The AI service returned an empty response");
+         }
+         LLMResponse.Message message=response.choices().get(0).message();
+        if (message == null) {
+            throw new LLMGatewayException(
+                    "The AI service returned an invalid response"
+            );
+        }
+
+        boolean hasText = message.content() != null
+                && !message.content().isBlank();
+
+        boolean hasToolCalls = message.toolCalls() != null
+                && !message.toolCalls().isEmpty();
+
+        if (!hasText && !hasToolCalls) {
+            throw new LLMGatewayException(
+                    "The AI service returned neither text nor tool calls"
+            );
+        }
+
+        return response;
     }
 }
