@@ -182,4 +182,15 @@ public class DocumentService {
             throw new FileTooLargeException();
         }
     }
+    public Document getOwnedDocument(Long id, Long userId) {
+
+        Document document = repo.findById(id)
+                .orElseThrow(DocumentNotFoundException::new);
+
+        if (!document.getOwner().getId().equals(userId)) {
+            throw new DocumentNotFoundException();
+        }
+
+        return document;
+    }
 }
