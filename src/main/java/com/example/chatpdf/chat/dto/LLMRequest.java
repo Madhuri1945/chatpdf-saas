@@ -1,5 +1,6 @@
 package com.example.chatpdf.chat.dto;
 
+import com.example.chatpdf.agent.dto.LLMTool;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.util.List;

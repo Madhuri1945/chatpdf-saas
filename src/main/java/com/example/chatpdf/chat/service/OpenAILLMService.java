@@ -72,6 +72,7 @@ public class OpenAILLMService implements LLMService{
         return response.choices().get(0).message().content();
     }
 
+
     @Override
     public LLMResponse generateResponse(LLMRequest request){
         if (request == null

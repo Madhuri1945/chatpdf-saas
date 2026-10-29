@@ -1,9 +1,10 @@
 package com.example.chatpdf.agent;
 
 import com.example.chatpdf.agent.dto.AgentResult;
+import com.example.chatpdf.agent.dto.LLMTool;
 import com.example.chatpdf.agent.tool.ToolRegistry;
 import com.example.chatpdf.chat.dto.LLMMessage;
-import com.example.chatpdf.chat.dto.LLMTool;
+
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -27,7 +28,7 @@ public class AgentOrchestrator {
         List<LLMMessage> messages = new ArrayList<>(history);
         messages.add(new LLMMessage("user", question));
         List<LLMTool> availableToolDef=toolRegistry.getDefinitions();
-        AgentResult result=agentLoop.run(documentId,userId,history,availableToolDef);
+        AgentResult result=agentLoop.run(documentId,userId,messages,availableToolDef);
         return result;
     }
 }
