@@ -10,10 +10,12 @@ import com.example.chatpdf.document.service.DocumentService;
 import com.example.chatpdf.document.service.SimilaritySearchService;
 import com.example.chatpdf.exceptions.common.DocumentNotReadyException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Map;
 
+@Component
 public class SearchPdfTool implements AgentTool{
     private final ObjectMapper objectMapper;
     private final DocumentService documentService;

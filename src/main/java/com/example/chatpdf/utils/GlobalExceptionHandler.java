@@ -15,6 +15,7 @@ import com.example.chatpdf.document.exception.FileTooLargeException;
 import com.example.chatpdf.document.exception.InvalidFileException;
 
 import com.example.chatpdf.exceptions.llm.LLMGatewayException;
+import com.example.chatpdf.exceptions.tools.ToolNotFoundException;
 import jakarta.validation.ConstraintViolationException;
 
 import org.slf4j.Logger;
@@ -184,7 +185,14 @@ public class GlobalExceptionHandler {
                 .badRequest()
                 .body(ApiResponse.error(ex.getMessage()));
     }
-
+    @ExceptionHandler(ToolNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleToolNotFound(ToolNotFoundException ex){
+        ApiResponse<Void> response=new ApiResponse<>(
+                false,ex.getMessage(),null
+        );
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(response);
+    }
     // Unexpected errors
     public ResponseEntity<ApiResponse<Void>> handleDocumentNotReady(DocumentNotReadyException ex){
         ApiResponse<Void> response=new ApiResponse<>(
