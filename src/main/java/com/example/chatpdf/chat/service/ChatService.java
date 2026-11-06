@@ -1,5 +1,7 @@
 package com.example.chatpdf.chat.service;
 
+import com.example.chatpdf.agent.AgentOrchestrator;
+import com.example.chatpdf.agent.dto.AgentResult;
 import com.example.chatpdf.auth.User;
 import com.example.chatpdf.chat.Chat;
 import com.example.chatpdf.chat.ChatRepository;
@@ -15,7 +17,9 @@ import com.example.chatpdf.exceptions.common.DocumentNotReadyException;
 import com.example.chatpdf.message.Message;
 import com.example.chatpdf.message.MessageRepository;
 import com.example.chatpdf.message.Role;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import org.springframework.stereotype.Service;
+import tools.jackson.databind.ObjectMapper;
 
 import java.util.List;
 import java.util.Locale;
@@ -29,13 +33,18 @@ public class ChatService {
     private final MessageRepository messageRepository;
     private final SimilaritySearchService similaritySearchService;
     private final LLMService llmService;
+    private final AgentOrchestrator agentOrchestrator;
+    private final ObjectMapper objectMapper;
 
-    public ChatService(DocumentRepository documentRepository, ChatRepository chatRepository, MessageRepository messageRepository, SimilaritySearchService similaritySearchService, LLMService llmService) {
+    public ChatService(DocumentRepository documentRepository, ChatRepository chatRepository, MessageRepository messageRepository, SimilaritySearchService similaritySearchService, LLMService llmService
+    ,AgentOrchestrator agentOrchestrator,ObjectMapper objectMapper) {
         this.documentRepository = documentRepository;
         this.chatRepository = chatRepository;
         this.messageRepository = messageRepository;
         this.similaritySearchService = similaritySearchService;
         this.llmService = llmService;
+        this.agentOrchestrator=agentOrchestrator;
+        this.objectMapper=objectMapper;
     }
 
     public ChatResponse askQuestion(Long documentId, String question, User user){
@@ -56,31 +65,23 @@ public class ChatService {
         message.setChat(chat);
         message.setRole(Role.USER);
         messageRepository.save(message);
-        List<DocumentChunk> chunks=similaritySearchService.search(documentId,question,5);
-        String context = chunks.stream()
-                .map(DocumentChunk::getContent)
-                .collect(java.util.stream.Collectors.joining(
-                        "\n\n--- Relevant passage ---\n\n"
-                ));
-        String answer= llmService.generateAnswer(question,context,List.of());
+        AgentResult result=agentOrchestrator.run(documentId,question, user.getId(), List.of());
+        saveToolInteractions(chat,result.toolInteractions());
         Message assistantMessage=new Message();
         assistantMessage.setChat(chat);
-        assistantMessage.setContent(answer);
+        assistantMessage.setContent(result.answer());
         assistantMessage.setRole(Role.ASSISTANT);
         messageRepository.save(assistantMessage);
-        List<ChatResponse.SourceResponse> sources =
-                chunks.stream()
-                        .map(chunk ->
-                                new ChatResponse.SourceResponse(
-                                        chunk.getId(),
-                                        chunk.getChunkIndex()
-                                )
-                        )
-                        .toList();
+        List<ChatResponse.SourceResponse> sources = result.sources().stream()
+                .map(source -> new ChatResponse.SourceResponse(
+                        source.chunkId(),
+                        source.chunkIndex()
+                ))
+                .toList();
         return new ChatResponse(
                 chat.getId(),
                 question,
-                answer,
+                result.answer(),
                 sources
         );
     }
@@ -105,24 +106,61 @@ public class ChatService {
         userMessage.setContent(question);
         userMessage.setRole(Role.USER);
         messageRepository.save(userMessage);
-        List<DocumentChunk> chunks=similaritySearchService.search(documentId,question,5);
-        String context=chunks.stream().map(DocumentChunk::getContent).collect(java.util.stream.Collectors.joining("\n\n"));
-        String answer= llmService.generateAnswer(
-                question,context,history
+        AgentResult result = agentOrchestrator.run(
+                documentId,
+                question,
+                user.getId(),
+                history
         );
+        saveToolInteractions(chat, result.toolInteractions());
         Message assistantMessage=new Message();
         assistantMessage.setChat(chat);
-        assistantMessage.setContent(answer);
+        assistantMessage.setContent(result.answer());
         assistantMessage.setRole(Role.ASSISTANT);
         messageRepository.save(assistantMessage);
 
-        List<ChatResponse.SourceResponse> sources=chunks.stream()
-                .map(chunk->new ChatResponse.SourceResponse(
-                        chunk.getId(),chunk.getChunkIndex()
+        List<ChatResponse.SourceResponse> sources=result.sources().stream()
+                .map(source->new ChatResponse.SourceResponse(
+                        source.chunkId(), source.chunkIndex()
                 )).toList();
         return new ChatResponse(
                 chat.getId(),
-                question,answer,sources
+                question, result.answer(), sources
         );
+    }
+    private void saveToolInteractions(
+            Chat chat,
+            List<LLMMessage> interactions
+    ) {
+        for (LLMMessage interaction : interactions) {
+
+            Message message = new Message();
+
+            // Associate this message with the current chat
+            message.setChat(chat);
+
+            // Convert LLM role into your database Role enum
+            message.setRole(
+                    Role.valueOf(interaction.role().toUpperCase())
+            );
+
+            // Save message content
+            message.setContent(interaction.content());
+
+            // Save tool call ID (used for tool-result messages)
+            message.setToolCallId(interaction.toolCallId());
+            // Save assistant tool calls as JSON
+            if (interaction.toolCalls() != null
+                    && !interaction.toolCalls().isEmpty()) {
+
+                message.setToolCalls(
+                        objectMapper.writeValueAsString(
+                                interaction.toolCalls()
+                        )
+                );
+            }
+
+            messageRepository.save(message);
+        }
     }
 }

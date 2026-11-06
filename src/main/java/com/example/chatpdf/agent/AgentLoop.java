@@ -47,6 +47,7 @@ public class AgentLoop {
     ) {
         // Ensure we can safely append messages.
         messages = new ArrayList<>(messages);
+        List<LLMMessage> toolInteractions = new ArrayList<>();
 
         for (int iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
 
@@ -98,12 +99,14 @@ public class AgentLoop {
                         choice.message().toolCalls();
 
                 // Record the assistant's original tool request FIRST.
-                messages.add(new LLMMessage(
+                LLMMessage assistantToolMessage = new LLMMessage(
                         "assistant",
                         choice.message().content(),
                         toolCalls,
                         null
-                ));
+                );
+               messages.add(assistantToolMessage);
+               toolInteractions.add(assistantToolMessage);
 
                 // Execute every requested tool and record its result.
                 for (LLMToolCall toolCall : toolCalls) {
@@ -131,12 +134,15 @@ public class AgentLoop {
                     }
 
                     // Link the result to its original tool request.
-                    messages.add(new LLMMessage(
+                    LLMMessage toolResultMessage = new LLMMessage(
                             "tool",
                             resultJson,
                             null,
                             toolCallId
-                    ));
+                    );
+
+                    messages.add(toolResultMessage);
+                    toolInteractions.add(toolResultMessage);
                 }
 
                 // Continue the loop with the updated conversation.
